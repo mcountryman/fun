@@ -1,0 +1,2 @@
+# fun
+unsafe: `yes`
