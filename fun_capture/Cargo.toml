@@ -1,0 +1,27 @@
+[package]
+name = "fun_capture"
+version = "0.1.0"
+authors = ["Marvin Countryman <marvinc@siqinc.com>"]
+edition = "2018"
+
+[[bench]]
+name = "capture_windows_dc"
+harness = false
+
+[dependencies]
+clap = "3.0.0-beta.2"
+
+[dev-dependencies]
+criterion = "0.3.3"
+
+[target.'cfg(windows)'.dependencies.winapi]
+version = "0.3.9"
+features = [
+  "std",
+  "debug",
+  "impl-default",
+
+  "winuser",
+  "wingdi",
+  "windef",
+]
