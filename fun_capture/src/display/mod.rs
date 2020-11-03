@@ -1,7 +1,14 @@
+use std::io::Result;
+use std::ops::Deref;
+
 #[cfg(target_os = "windows")]
 mod windows;
+#[cfg(target_os = "macos")]
+mod macos;
 
 mod imp {
+  #[cfg(target_os = "macos")]
+  pub use super::macos::*;
   #[cfg(target_os = "windows")]
   pub use super::windows::*;
 }
@@ -9,40 +16,24 @@ mod imp {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum DisplayKind {
   Primary,
-  Secondary,
+  Standard,
 }
 
 pub struct Display(imp::Display);
 
-impl Display {
-  pub fn primary() -> Option<Display> {
-    imp::Display::all()
-      .into_iter()
-      .map(Display)
-      .find(|display| display.kind() == DisplayKind::Primary)
-  }
+pub fn get_primary() -> Result<Display> {
+  imp::get_primary().map(Display)
+}
 
-  pub fn all() -> Vec<Display> {
-    imp::Display::all().into_iter().map(Display).collect()
-  }
+pub fn get_displays() -> Result<Vec<Display>> {
+  imp::get_displays()
+    .map(|inner| inner.into_iter().map(Display).collect())
+}
 
-  pub fn x(&self) -> i32 {
-    self.0.x
-  }
+impl Deref for Display {
+  type Target = imp::Display;
 
-  pub fn y(&self) -> i32 {
-    self.0.y
-  }
-
-  pub fn width(&self) -> u32 {
-    self.0.width
-  }
-
-  pub fn height(&self) -> u32 {
-    self.0.height
-  }
-
-  pub fn kind(&self) -> DisplayKind {
-    self.0.kind
+  fn deref(&self) -> &Self::Target {
+    &self.0
   }
 }

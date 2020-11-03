@@ -10,6 +10,7 @@ harness = false
 
 [dependencies]
 clap = "3.0.0-beta.2"
+block = "0.1"
 
 [dev-dependencies]
 criterion = "0.3.3"
