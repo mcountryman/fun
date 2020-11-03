@@ -9,12 +9,12 @@ use winapi::um::wingdi::{
 };
 use winapi::um::winuser::{GetDC, ReleaseDC};
 
-use crate::capture::{Capture, Frame};
+use crate::capture::{Capture, CaptureOpts, Frame};
 use crate::display::Display;
 use std::io::Error;
 use winapi::_core::ptr::null;
 
-pub struct DisplayContextCapture<'a> {
+pub struct DisplayContextCapture {
   x: i32,
   y: i32,
   width: u32,
@@ -23,22 +23,20 @@ pub struct DisplayContextCapture<'a> {
   hdc: *mut HDC__,
   bmp: *mut HBITMAP__,
   bmp_old: *mut c_void,
-
-  display: &'a Display,
 }
 
 impl DisplayContextCapture {
-  pub fn new(display: &Display) -> Self {
+  pub fn new(opts: CaptureOpts) -> Self {
     unsafe {
       let hdc = CreateCompatibleDC(null_mut());
-      let bmp = Self::create_bitmap(display, hdc);
+      let bmp = Self::create_bitmap(&opts.display, hdc);
       let bmp_old = SelectObject(hdc, bmp as *mut c_void);
 
       Self {
-        x: display.x(),
-        y: display.y(),
-        width: display.width(),
-        height: display.height(),
+        x: opts.display.x(),
+        y: opts.display.y(),
+        width: opts.display.width(),
+        height: opts.display.height(),
 
         hdc,
         bmp,
