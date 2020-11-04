@@ -1,59 +1,65 @@
-use std::cell::RefCell;
+use std::borrow::Cow;
 use std::ffi::c_void;
 use std::io::{Error, Result};
+use std::ops::Deref;
 use std::ptr::null_mut;
+use std::slice::from_raw_parts;
+use std::sync::mpsc::{sync_channel, Receiver};
 
-use block::{Block, ConcreteBlock};
+use block::ConcreteBlock;
 
 use crate::capture::Frame;
 use crate::capture::{Capture, CaptureOpts};
+use crate::ffi::macos::CFDictionaryRef;
 use crate::ffi::macos::{
   cfbool, dispatch_queue_create, dispatch_release, kCFTypeDictionaryKeyCallBacks,
   kCFTypeDictionaryValueCallBacks, kCGDisplayStreamMinimumFrameTime,
   kCGDisplayStreamPreserveAspectRatio, kCGDisplayStreamQueueDepth,
   kCGDisplayStreamShowCursor, CFDictionaryCreate, CFNumberCreate, CFNumberType, CFRetain,
-  CGDisplayStreamFrameStatus, DispatchQueue, IOSurfaceDecrementUseCount,
-  IOSurfaceGetAllocSize, IOSurfaceGetBaseAddress, IOSurfaceIncrementUseCount,
-  IOSurfaceLock, IOSurfaceRef, IOSurfaceUnlock, SURFACE_LOCK_READ_ONLY,
+  CGDisplayStreamFrameStatus, CGDisplayStreamStart, CGError, DispatchQueue,
+  IOSurfaceDecrementUseCount, IOSurfaceGetAllocSize, IOSurfaceGetBaseAddress,
+  IOSurfaceIncrementUseCount, IOSurfaceLock, IOSurfaceRef, IOSurfaceUnlock,
+  SURFACE_LOCK_READ_ONLY,
 };
-use crate::ffi::macos::{CFDictionaryRef, FrameAvailableHandler};
 use crate::ffi::macos::{
   CFRelease, CGDisplayStreamCreateWithDispatchQueue, CGDisplayStreamRef,
   CGDisplayStreamStop, PixelFormat,
 };
-use std::borrow::Cow;
-use std::ops::Deref;
-use std::slice::from_raw_parts;
 
 pub struct QuartzCapture {
+  rx: Receiver<IOSurfaceRef>,
   queue: DispatchQueue,
   stream: CGDisplayStreamRef,
-  surface: RefCell<Option<IOSurfaceRef>>,
 }
 
 impl QuartzCapture {
   pub fn new(opts: CaptureOpts) -> Result<Self> {
-    let surface = RefCell::<Option<IOSurfaceRef>>::new(None);
+    let (tx, rx) = sync_channel::<IOSurfaceRef>(5);
+
+    // Create dispatch queue
     let queue = unsafe {
-      dispatch_queue_create(b"quadrupleslap.scrap\0".as_ptr() as *const _, null_mut())
+      dispatch_queue_create(
+        b"fun::fun_capture::QuartzCapture\0".as_ptr() as *const _,
+        null_mut(),
+      )
     };
 
-    let handler_surface = surface.clone();
-    let handler: FrameAvailableHandler = ConcreteBlock::new(move |status, _, s, _| {
-      println!("frame_status: {:#?}", status);
-
+    // Create ObjC callback `block`
+    let handler = ConcreteBlock::new(move |status, _, s, _| {
       if status == CGDisplayStreamFrameStatus::FrameComplete {
-        handler_surface.replace(Some(s));
+        tx.send(s).unwrap();
       }
     })
     .copy();
 
+    // Create config dictionary
     let config = Self::build_config(&opts);
     let stream = unsafe {
       let display = opts.display.handle();
       let output_width = opts.display.width() as usize;
       let output_height = opts.display.height() as usize;
 
+      // Create display stream
       CGDisplayStreamCreateWithDispatchQueue(
         display,
         output_width,
@@ -61,7 +67,7 @@ impl QuartzCapture {
         PixelFormat::Argb8888,
         config,
         queue,
-        &*handler as *const Block<_, _> as *const c_void,
+        &handler,
       )
     };
 
@@ -71,11 +77,12 @@ impl QuartzCapture {
       return Err(Error::last_os_error());
     }
 
-    Ok(Self {
-      queue,
-      stream,
-      surface,
-    })
+    let status = unsafe { CGDisplayStreamStart(stream) };
+    if status != CGError::Success {
+      return Err(Error::from_raw_os_error(status as i32));
+    }
+
+    Ok(Self { rx, queue, stream })
   }
 
   fn build_config(opts: &CaptureOpts) -> CFDictionaryRef {
@@ -99,13 +106,18 @@ impl QuartzCapture {
         kCGDisplayStreamQueueDepth,
       ];
 
-      let values = [cfbool(opts.cursor), cfbool(false), throttle, queue_length];
+      let values = [
+        cfbool(opts.cursor), //
+        cfbool(false),
+        throttle,
+        queue_length,
+      ];
 
       let config = CFDictionaryCreate(
         null_mut(),
         keys.as_ptr(),
         values.as_ptr(),
-        4,
+        2,
         &kCFTypeDictionaryKeyCallBacks,
         &kCFTypeDictionaryValueCallBacks,
       );
@@ -120,9 +132,9 @@ impl QuartzCapture {
 
 impl<'a> Capture<QuartzFrame<'a>> for QuartzCapture {
   fn frame(&mut self) -> Frame<QuartzFrame<'a>> {
-    match self.surface.replace(None) {
-      Some(surface) => Frame::Ready(QuartzFrame::new(surface)),
-      None => Frame::Blocking,
+    match self.rx.recv() {
+      Ok(surface) => Frame::Ready(QuartzFrame::new(surface)),
+      Err(_) => Frame::Blocking,
     }
   }
 }

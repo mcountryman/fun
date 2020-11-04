@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use block::RcBlock;
+use block::{Block, RcBlock};
 use std::os::raw::c_void;
 
 pub type CGDisplayStreamRef = *mut c_void;
@@ -119,7 +119,15 @@ pub enum PixelFormat {
   __Nonexhaustive,
 }
 
-pub type CGDisplayStreamFrameAvailableHandler = *const c_void;
+pub type CGDisplayStreamFrameAvailableHandler = Block<
+  (
+    CGDisplayStreamFrameStatus, // status
+    u64,                        // displayTime
+    IOSurfaceRef,               // frameSurface
+    CGDisplayStreamUpdateRef,   // updateRef
+  ),
+  (),
+>;
 
 pub type FrameAvailableHandler = RcBlock<
   (
@@ -168,7 +176,7 @@ extern "C" {
     pixel_format: PixelFormat,
     properties: CFDictionaryRef,
     queue: DispatchQueue,
-    handler: CGDisplayStreamFrameAvailableHandler,
+    handler: &CGDisplayStreamFrameAvailableHandler,
   ) -> CGDisplayStreamRef;
 
   pub fn CGDisplayStreamStart(displayStream: CGDisplayStreamRef) -> CGError;

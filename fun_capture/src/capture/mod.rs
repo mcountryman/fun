@@ -19,7 +19,7 @@ pub trait Capture<T: Debug> {
 pub struct CaptureOpts {
   pub(crate) cursor: bool,
   pub(crate) display: Display,
-  pub(crate) frame_rate: u32,
+  pub(crate) frame_rate: f64,
   pub(crate) frame_queue: u8,
 }
 
@@ -28,7 +28,7 @@ impl CaptureOpts {
     Self {
       cursor: true,
       display,
-      frame_rate: 0,
+      frame_rate: 0.0,
       frame_queue: 3,
     }
   }
@@ -38,7 +38,7 @@ impl CaptureOpts {
     self
   }
 
-  pub fn frame_rate(&mut self, frame_rate: u32) -> &mut Self {
+  pub fn frame_rate(&mut self, frame_rate: f64) -> &mut Self {
     self.frame_rate = frame_rate;
     self
   }
