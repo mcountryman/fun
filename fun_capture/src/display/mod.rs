@@ -1,10 +1,10 @@
 use std::io::Result;
 use std::ops::Deref;
 
-#[cfg(target_os = "windows")]
-mod windows;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
 mod imp {
   #[cfg(target_os = "macos")]
@@ -26,8 +26,7 @@ pub fn get_primary() -> Result<Display> {
 }
 
 pub fn get_displays() -> Result<Vec<Display>> {
-  imp::get_displays()
-    .map(|inner| inner.into_iter().map(Display).collect())
+  imp::get_displays().map(|inner| inner.map(Display).collect())
 }
 
 impl Deref for Display {

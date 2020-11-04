@@ -1,12 +1,13 @@
-use std::io::Error;
+use std::io::{Error, Result};
 use std::mem::size_of;
 use std::ptr::{null, null_mut};
 use std::vec::IntoIter;
 
 use winapi::shared::minwindef::{BOOL, LPARAM, TRUE};
-use winapi::shared::windef::{HDC, HMONITOR, LPRECT};
+use winapi::shared::windef::{HDC, HMONITOR, LPRECT, POINT};
 use winapi::um::winuser::{
-  EnumDisplayMonitors, GetMonitorInfoW, MONITORINFO, MONITORINFOF_PRIMARY,
+  EnumDisplayMonitors, GetMonitorInfoW, MonitorFromPoint, MONITORINFO,
+  MONITORINFOF_PRIMARY,
 };
 
 use crate::display::DisplayKind;
@@ -59,7 +60,24 @@ impl Display {
   }
 }
 
-pub fn get_displays() -> IntoIter<Display> {
+pub fn get_primary() -> Result<Display> {
+  let point = POINT::default();
+  let handle = unsafe { MonitorFromPoint(point, MONITORINFOF_PRIMARY) };
+
+  let mut info = MONITORINFO::default();
+  let info_ptr: *mut _ = &mut info;
+
+  info.cbSize = size_of::<MONITORINFO>() as u32;
+
+  let result = unsafe { GetMonitorInfoW(handle, info_ptr) };
+  if result == TRUE {
+    Ok(Display::new(info, handle))
+  } else {
+    Err(Error::last_os_error())
+  }
+}
+
+pub fn get_displays() -> Result<IntoIter<Display>> {
   let mut displays = Vec::new();
   let data = &mut displays as *mut _;
   let result = unsafe {
@@ -67,10 +85,10 @@ pub fn get_displays() -> IntoIter<Display> {
   };
 
   if result != TRUE {
-    panic!("Failed to enumerate displays: {}", Error::last_os_error());
+    Err(Error::last_os_error())
+  } else {
+    Ok(displays.into_iter())
   }
-
-  displays.into_iter()
 }
 
 unsafe extern "system" fn display_enumerator(
@@ -95,11 +113,34 @@ unsafe extern "system" fn display_enumerator(
 
 #[cfg(test)]
 mod tests {
-  use super::Display;
-  use crate::display::get_displays;
+  use super::DisplayKind;
+  use super::{get_displays, get_primary, Display};
 
   #[test]
-  fn test_get_all() {
-    assert!(get_displays().next().is_some());
+  fn test_get_primary() {
+    let display = get_primary().unwrap();
+
+    assert_eq!(display.x(), 0);
+    assert_eq!(display.y(), 0);
+    assert!(display.width() > 0);
+    assert!(display.height() > 0);
+    assert_eq!(display.kind(), DisplayKind::Primary);
+  }
+
+  #[test]
+  fn test_get_displays() {
+    let displays: Vec<Display> = get_displays().unwrap().collect();
+    assert!(!displays.is_empty());
+    for display in displays {
+      if display.kind() == DisplayKind::Primary {
+        assert_eq!(display.x(), 0);
+        assert_eq!(display.y(), 0);
+        assert!(display.width() > 0);
+        assert!(display.height() > 0);
+      } else {
+        assert!(display.width() > 0);
+        assert!(display.height() > 0);
+      }
+    }
   }
 }
