@@ -13,12 +13,15 @@ use texture::TextureSettings;
 use fun_capture::capture::quartz::QuartzCapture;
 use fun_capture::capture::{Capture, CaptureOpts, Frame};
 use fun_capture::display::get_primary;
+use std::thread::spawn;
 
-fn main() {
-  let mut window: GlutinWindow = WindowSettings::new("quartz", [1400, 900])
+pub(crate) fn run() {
+  let mut size = [1400, 900];
+  let mut window: GlutinWindow = WindowSettings::new("quartz", size)
     .graphics_api(OpenGL::V4_1)
     .resizable(true)
     .exit_on_esc(true)
+    .vsync(false)
     .build()
     .unwrap();
 
@@ -37,19 +40,22 @@ fn main() {
 
   while let Some(event) = events.next(&mut window) {
     if event.update_args().is_some() {
-      if let Frame::Ready(frame) = capture.frame() {
-        let frame =
-          &RgbaImage::from_raw(display.width(), display.height(), frame.to_vec())
-            .unwrap();
-
-        texture = Texture::from_image(&frame, &TextureSettings::new());
-      }
+      // if let Frame::Ready(frame) = capture.frame() {
+      //   let frame =
+      //     &RgbaImage::from_raw(display.width(), display.height(), frame.to_vec())
+      //       .unwrap();
+      //
+      //   texture = Texture::from_image(&frame, &TextureSettings::new());
+      // }
     }
 
     if let Some(args) = event.render_args() {
       gl.draw(args.viewport(), |ctx, gl| {
+        size = args.viewport().draw_size;
+
         clear([0.2, 0.2, 0.2, 1.0], gl);
 
+        // let ctx = ctx.scale(size[0] as f64, size[1] as f64);
         let window_width = window.size().width;
         let window_height = window.size().height;
         let display_width = display.width() as f64;

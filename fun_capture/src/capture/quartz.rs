@@ -4,7 +4,6 @@ use std::io::{Error, Result};
 use std::ops::Deref;
 use std::ptr::null_mut;
 use std::slice::from_raw_parts;
-use std::sync::mpsc::{sync_channel, Receiver};
 
 use block::ConcreteBlock;
 
@@ -25,6 +24,7 @@ use crate::ffi::macos::{
   CFRelease, CGDisplayStreamCreateWithDispatchQueue, CGDisplayStreamRef,
   CGDisplayStreamStop, PixelFormat,
 };
+use crossbeam_channel::{bounded, Receiver};
 
 pub struct QuartzCapture {
   rx: Receiver<IOSurfaceRef>,
@@ -34,7 +34,7 @@ pub struct QuartzCapture {
 
 impl QuartzCapture {
   pub fn new(opts: CaptureOpts) -> Result<Self> {
-    let (tx, rx) = sync_channel::<IOSurfaceRef>(5);
+    let (tx, rx) = bounded::<IOSurfaceRef>(5);
 
     // Create dispatch queue
     let queue = unsafe {
@@ -132,7 +132,7 @@ impl QuartzCapture {
 
 impl<'a> Capture<QuartzFrame<'a>> for QuartzCapture {
   fn frame(&mut self) -> Frame<QuartzFrame<'a>> {
-    match self.rx.recv() {
+    match self.rx.try_recv() {
       Ok(surface) => Frame::Ready(QuartzFrame::new(surface)),
       Err(_) => Frame::Blocking,
     }
@@ -200,21 +200,29 @@ impl Drop for QuartzFrame<'_> {
 #[cfg(test)]
 mod tests {
   use crate::capture::quartz::QuartzCapture;
-  use crate::capture::{Capture, CaptureOpts};
+  use crate::capture::{Capture, CaptureOpts, Frame};
   use crate::display::get_primary;
+  use std::time::Instant;
 
   #[test]
   fn test_capture() {
     let display = get_primary().unwrap();
     let opts = CaptureOpts::new(display);
     let mut capture = QuartzCapture::new(opts).unwrap();
+    let instant = Instant::now();
+    let mut size = 0;
 
-    for _ in 0..10 {
-      let frame = capture.frame();
-      println!("{:#?}", frame);
-      std::thread::sleep(std::time::Duration::from_secs(1));
+    for _ in 0..1000 {
+      match capture.frame() {
+        Frame::Ready(frame) => size += frame.len(),
+        Frame::Blocking => (),
+      }
     }
 
-    panic!("test");
+    let mbit = size as f32 / 1000000.0;
+    let seconds = instant.elapsed().as_secs_f32();
+
+    println!("Mbit   = {}", mbit);
+    println!("Mbit/s = {}", mbit / seconds);
   }
 }

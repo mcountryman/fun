@@ -1,0 +1,21 @@
+[package]
+name = "fun"
+version = "0.1.0"
+authors = ["Marvin Countryman <me@maar.vin>"]
+edition = "2018"
+
+[features]
+
+[dependencies]
+glium = "0.27"
+imgui = "0.5"
+imgui-glium-renderer = "0.5"
+imgui-winit-support = "0.5"
+crossbeam-channel = "0.5"
+#image = "0.23"
+#piston = "0.52.0"
+#piston-texture = "0.8"
+#piston2d-graphics = "0.37.0"
+#pistoncore-glutin_window = "0.66.0"
+#piston2d-opengl_graphics = "0.74.0"
+fun_capture = { path = "../fun_capture" }
